@@ -21,6 +21,9 @@ const (
 	DEFINE_AGENT_ENABLED          = "SWKAC_ENABLE"
 	DEFINE_AGENT_PATH             = "/opt/skywalking"
 	DEFINE_JAVA_AGENT_ENV         = "SWKAC_JAVA_AGENT_ENV"
+	POD_AFFINITY                  = "podAffinity"
+	POD_ANTI_AFFINITY             = "podAntiAffinity"
+	AFFINITY_KEY                  = "affinityKey"
 )
 
 type Patch struct {
@@ -111,20 +114,22 @@ func generatePatch(ar v1.AdmissionReview, pod corev1.Pod) []Patch {
 
 	patches = addLabels(ar, pod, patches)
 
-	patches = addSharedVolume(ar, pod, patches)
-
-	patches = addInitContainer(ar, pod, patches)
+	//patches = addSharedVolume(ar, pod, patches)
+	//
+	//patches = addInitContainer(ar, pod, patches)
 
 	// container cycle
 	for ic, container := range pod.Spec.Containers {
 		if containerMatching(container) {
-			patches = addContainerVolumeMount(ar, pod, ic, container, patches)
-
-			patches = addContainerStartAgentCommand(ar, pod, ic, container, patches)
-
-			patches = addContainerCollectorDefine(ar, pod, ic, container, patches)
-
-			patches = addContainerAgentName(ar, pod, ic, container, patches)
+			//patches = addContainerVolumeMount(ar, pod, ic, container, patches)
+			//
+			//patches = addContainerStartAgentCommand(ar, pod, ic, container, patches)
+			//
+			//patches = addContainerCollectorDefine(ar, pod, ic, container, patches)
+			//
+			//patches = addContainerAgentName(ar, pod, ic, container, patches)
+			//
+			patches = addAffinity(ar, pod, ic, container, patches)
 		}
 	}
 	// Debug Patch
@@ -286,6 +291,48 @@ func addSharedVolume(ar v1.AdmissionReview, pod corev1.Pod, patches []Patch) []P
 		patches = append(patches, Patch{OP: OP_ADD, Path: "/spec/volumes", Value: [0]struct{}{}})
 	}
 	patches = append(patches, Patch{OP: OP_ADD, Path: "/spec/volumes/-", Value: swVolume})
+	return patches
+}
+
+// addAffinity
+func addAffinity(ar v1.AdmissionReview, pod corev1.Pod, ic int, container corev1.Container, patches []Patch) []Patch {
+	envCache := map[string]string{}
+	topologyKey := "kubernetes.io/hostname"
+	if len(container.Env) != 0 {
+		for _, env := range container.Env {
+			if env.Name == POD_AFFINITY {
+				envCache[env.Name] = env.Value
+			}
+			if env.Name == POD_ANTI_AFFINITY {
+				envCache[env.Name] = env.Value
+			}
+			if env.Name == AFFINITY_KEY {
+				value := env.Value
+				patches = append(patches, Patch{OP: OP_ADD, Path: "/metadata/labels/" + AFFINITY_KEY, Value: value})
+			}
+		}
+		podAffinities := strings.Split(envCache[POD_AFFINITY], "&")
+		af := corev1.PodAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+				corev1.WeightedPodAffinityTerm{
+					Weight: 100,
+					PodAffinityTerm: corev1.PodAffinityTerm{
+						LabelSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								metav1.LabelSelectorRequirement{
+									Key:      AFFINITY_KEY,
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   podAffinities,
+								},
+							},
+						},
+						TopologyKey: topologyKey,
+					},
+				},
+			},
+		}
+		patches = append(patches, Patch{OP: OP_ADD, Path: "/spec/affinity/podAffinity", Value: af})
+	}
 	return patches
 }
 
