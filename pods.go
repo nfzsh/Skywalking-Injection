@@ -296,42 +296,60 @@ func addSharedVolume(ar v1.AdmissionReview, pod corev1.Pod, patches []Patch) []P
 
 // addAffinity
 func addAffinity(ar v1.AdmissionReview, pod corev1.Pod, ic int, container corev1.Container, patches []Patch) []Patch {
-	envCache := map[string]string{}
 	topologyKey := "kubernetes.io/hostname"
 	if len(container.Env) != 0 {
 		for _, env := range container.Env {
 			if env.Name == POD_AFFINITY {
-				envCache[env.Name] = env.Value
+				podAffinities := strings.Split(env.Value, "&")
+				af := corev1.PodAffinity{
+					PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+						corev1.WeightedPodAffinityTerm{
+							Weight: 100,
+							PodAffinityTerm: corev1.PodAffinityTerm{
+								LabelSelector: &metav1.LabelSelector{
+									MatchExpressions: []metav1.LabelSelectorRequirement{
+										metav1.LabelSelectorRequirement{
+											Key:      AFFINITY_KEY,
+											Operator: metav1.LabelSelectorOpIn,
+											Values:   podAffinities,
+										},
+									},
+								},
+								TopologyKey: topologyKey,
+							},
+						},
+					},
+				}
+				patches = append(patches, Patch{OP: OP_ADD, Path: "/spec/affinity/podAffinity", Value: af})
 			}
 			if env.Name == POD_ANTI_AFFINITY {
-				envCache[env.Name] = env.Value
+				podAntiAffinities := strings.Split(env.Value, "&")
+				an := corev1.PodAntiAffinity{
+					PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+						corev1.WeightedPodAffinityTerm{
+							Weight: 100,
+							PodAffinityTerm: corev1.PodAffinityTerm{
+								LabelSelector: &metav1.LabelSelector{
+									MatchExpressions: []metav1.LabelSelectorRequirement{
+										metav1.LabelSelectorRequirement{
+											Key:      AFFINITY_KEY,
+											Operator: metav1.LabelSelectorOpIn,
+											Values:   podAntiAffinities,
+										},
+									},
+								},
+								TopologyKey: topologyKey,
+							},
+						},
+					},
+				}
+				patches = append(patches, Patch{OP: OP_ADD, Path: "/spec/affinity/podAntiAffinity", Value: an})
 			}
 			if env.Name == AFFINITY_KEY {
 				value := env.Value
 				patches = append(patches, Patch{OP: OP_ADD, Path: "/metadata/labels/" + AFFINITY_KEY, Value: value})
 			}
 		}
-		podAffinities := strings.Split(envCache[POD_AFFINITY], "&")
-		af := corev1.PodAffinity{
-			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
-				corev1.WeightedPodAffinityTerm{
-					Weight: 100,
-					PodAffinityTerm: corev1.PodAffinityTerm{
-						LabelSelector: &metav1.LabelSelector{
-							MatchExpressions: []metav1.LabelSelectorRequirement{
-								metav1.LabelSelectorRequirement{
-									Key:      AFFINITY_KEY,
-									Operator: metav1.LabelSelectorOpIn,
-									Values:   podAffinities,
-								},
-							},
-						},
-						TopologyKey: topologyKey,
-					},
-				},
-			},
-		}
-		patches = append(patches, Patch{OP: OP_ADD, Path: "/spec/affinity/podAffinity", Value: af})
 	}
 	return patches
 }
