@@ -114,21 +114,21 @@ func generatePatch(ar v1.AdmissionReview, pod corev1.Pod) []Patch {
 
 	patches = addLabels(ar, pod, patches)
 
-	//patches = addSharedVolume(ar, pod, patches)
-	//
-	//patches = addInitContainer(ar, pod, patches)
+	patches = addSharedVolume(ar, pod, patches)
+	
+	patches = addInitContainer(ar, pod, patches)
 
 	// container cycle
 	for ic, container := range pod.Spec.Containers {
 		if containerMatching(container) {
-			//patches = addContainerVolumeMount(ar, pod, ic, container, patches)
-			//
-			//patches = addContainerStartAgentCommand(ar, pod, ic, container, patches)
-			//
-			//patches = addContainerCollectorDefine(ar, pod, ic, container, patches)
-			//
-			//patches = addContainerAgentName(ar, pod, ic, container, patches)
-			//
+			patches = addContainerVolumeMount(ar, pod, ic, container, patches)
+			
+			patches = addContainerStartAgentCommand(ar, pod, ic, container, patches)
+			
+			patches = addContainerCollectorDefine(ar, pod, ic, container, patches)
+			
+			patches = addContainerAgentName(ar, pod, ic, container, patches)
+			
 			patches = addAffinity(ar, pod, ic, container, patches)
 		}
 	}
